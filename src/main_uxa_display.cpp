@@ -8,6 +8,7 @@ using namespace std;
 #include "uxa_display/SAMJointStateMsg.h"
 #include "sensor_msgs/JointState.h"
 #include "uxa_display/displayCmdMsg.h"
+#include "uxa_display/SAMJointPos12UpperMsg.h"
 
 
 
@@ -16,13 +17,13 @@ void sensor_callback(const uxa_display::dataSensorMsg::ConstPtr& msg){
 }
 
 void sam_feedback_callback(const uxa_display::SAMJointStateMsg::ConstPtr& msg){
-    //    ROS_INFO("sam data Feedback Joint State: %d",msg->SAMPos12[0]);
+//        ROS_INFO("sam data Feedback Joint State: %d",msg->SAMPosDegree[0]);
     if(sys_flag.display_sam_feedback){
         sys_flag.sam_feedback_avail=1;
         for (unsigned char i=0; i<25;i++)
         {
             samPos12Avail[i]=msg->SAMPos12Avail[i];
-            samPos12[i]=msg->SAMPos12[i];
+            samDegree[i]=msg->SAMPosDegree[i];
         }
     }
 }
@@ -38,28 +39,48 @@ void sam_control_callback(const uxa_display::SAMJointPos12Msg::ConstPtr& msg){
         }
     }
 }
+void sam_control_upper_callback(const uxa_display::SAMJointPos12UpperMsg::ConstPtr& msg){
+    if(sys_flag.display_sam_control_upper){
+        sys_flag.sam_control_avail=1;
+        for (unsigned char i=0; i<25;i++)
+        {
+            samMode[i]=msg->SAMMode[i];
+            samPos12[i]=msg->SAMPos12[i];
+        }
+    }
+}
 
 #define DISPLAY_TURN_OFF_ 0
 #define DISPLAY_SAM_CONTROL_ 1
 #define DISPLAY_SAM_FEEDBACK_ 2
-
+#define DISPLAY_SAM_UPPER_  3
 void sub_function_cmd(const uxa_display::displayCmdMsg::ConstPtr& msg){
     switch(msg->command){
     case DISPLAY_SAM_CONTROL_:
-        ROS_INFO("sam data control joint");
+        ROS_INFO("sam data control joint lower link");
         sys_flag.display_sam_control=1;
         sys_flag.display_sam_feedback=0;
+        sys_flag.display_sam_control_upper=0;
 
         break;
     case DISPLAY_SAM_FEEDBACK_:
         ROS_INFO("sam data Feedback Joint State");
         sys_flag.display_sam_control=0;
         sys_flag.display_sam_feedback=1;
+        sys_flag.display_sam_control_upper=0;
+
+        break;
+    case DISPLAY_SAM_UPPER_:
+        ROS_INFO("sam data control joint upper link");
+        sys_flag.display_sam_control=0;
+        sys_flag.display_sam_feedback=0;
+        sys_flag.display_sam_control_upper=1;
 
         break;
     default:
         sys_flag.display_sam_control=0;
         sys_flag.display_sam_feedback=0;
+        sys_flag.display_sam_control_upper=0;
         break;
     }
 }
@@ -70,6 +91,8 @@ int main(int argc, char **argv){
 
     ros::Subscriber sensor_data_sub =  n.subscribe<uxa_display::dataSensorMsg>("sensor_pub",1000,sensor_callback);
     ros::Subscriber sam_pos12_sub=n.subscribe<uxa_display::SAMJointPos12Msg>("sam_pos12_sub",1000,sam_control_callback);
+     ros::Subscriber sam_pos12_upper_sub=n.subscribe<uxa_display::SAMJointPos12UpperMsg>("sam_pos12_upper_sub",1000,sam_control_upper_callback);
+
     ros::Subscriber sam_joint_state_sub =  n.subscribe<uxa_display::SAMJointStateMsg>("sam_pub",1000,sam_feedback_callback);
     ros::Publisher rviz_jointState = n.advertise<sensor_msgs::JointState>("UXAJointState", 1000);
 
@@ -117,7 +140,6 @@ int main(int argc, char **argv){
         {
             FlagTimer.Hz_25=0;
             //=========
-
             if(sys_flag.sam_control_avail)
             {
                 sys_flag.sam_control_avail=0;
@@ -125,7 +147,11 @@ int main(int argc, char **argv){
                 {
                     if(samMode[i])
                     {
-                        angle[i]=((double)samPos12[i]-(double)samPos12_hardware[i])*pos12bitTorad*angle_sign[i];
+                        angle[i]=((double)samPos12[i]-(double)samPos12_hardware[i])*pos12bitTorad*angle_sign_rviz[i];
+                    }
+                    else
+                    {
+                        angle[i]=0;
                     }
                 }
                 for(unsigned char i=0;i<20;i++){
@@ -147,7 +173,7 @@ int main(int argc, char **argv){
                 {
                     if(samPos12Avail[i])
                     {
-                        angle[i]=((double)samPos12[i]-(double)samPos12_hardware[i])*pos12bitTorad*angle_sign[i];
+                        angle[i]=samDegree[i]*M_PI/180*angle_sign_rviz[i];
                     }
                 }
                 for(unsigned char i=0;i<20;i++){
@@ -164,6 +190,7 @@ int main(int argc, char **argv){
                 joint_state.header.stamp = ros::Time::now();
                 rviz_jointState.publish(joint_state);
             }
+
         }
         if(FlagTimer.Hz_100)
         {
@@ -176,7 +203,9 @@ int main(int argc, char **argv){
             FlagTimer.Hz_125=0;
             //===============
 
+
         }
+
 
 
         //==========================================

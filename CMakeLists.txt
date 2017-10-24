@@ -55,6 +55,7 @@ find_package(catkin REQUIRED COMPONENTS
    SAMJointStateMsg.msg
    SAMJointPos12Msg.msg
    displayCmdMsg.msg
+   SAMJointPos12UpperMsg.msg
  )
 
 ## Generate services in the 'srv' folder
